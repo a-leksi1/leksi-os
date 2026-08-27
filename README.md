@@ -82,34 +82,7 @@ For a realistic test, export the image to a local registry or use it with a disp
 
 ## Install the image
 
-`bootc install to-disk` writes an operating system to a disk. It can erase the selected target, so verify the target device carefully before running the command and keep backups of any data on it.
-
-### Install from the published registry image
-
-Boot a Fedora live environment or another supported Linux environment with Podman and `bootc` available. Replace `/dev/sdX` with the actual target disk, not a partition such as `/dev/sdX1`:
-
-```bash
-sudo bootc install to-disk \
-	--source-img ghcr.io/a-leksi1/leksi-os:latest \
-	/dev/sdX
-```
-
-Reboot after the installation completes, remove the live USB, and select the new disk in the firmware boot menu if necessary.
-
-### Install a locally built image
-
-Make the image available to the installation environment. For example, push it to a registry reachable by the live environment, then use that registry reference:
-
-```bash
-podman tag localhost/leksi-os:dev registry.example.com/leksi-os:dev
-podman push registry.example.com/leksi-os:dev
-
-sudo bootc install to-disk \
-	--source-img registry.example.com/leksi-os:dev \
-	/dev/sdX
-```
-
-Registry authentication, storage layout, bootloader options, and filesystem choices vary by host. Consult `bootc install to-disk --help` and the [bootc installation documentation](https://containers.github.io/bootc/installation/) before adapting this command.
+LeksiOS is installed by first installing a standard Fedora Atomic desktop, then switching that system to the LeksiOS image. See the [installing guide](guides/installing.md) and the [rebasing guide](guides/rebasing.md) for the full steps.
 
 ## Update an installed system
 
