@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry MT7925 Wi-Fi after boot
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mt7925-retry
+
+[Install]
+WantedBy=multi-user.target

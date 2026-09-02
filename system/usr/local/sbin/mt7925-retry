@@ -1,0 +1,10 @@
+#!/bin/bash
+
+sleep 12
+
+if ! nmcli -t -f DEVICE,STATE device status | grep -q '^wlp99s0:connected$'; then
+    logger -t mt7925-retry "MT7925 not connected, retrying Wi-Fi"
+    nmcli radio wifi off
+    sleep 2
+    nmcli radio wifi on
+fi
