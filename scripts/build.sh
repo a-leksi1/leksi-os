@@ -26,6 +26,24 @@ dnf5 -y copr disable avengemedia/dms
 
 systemctl --global add-wants niri.service dms.service
 
+### Graphical login screen (dms-greeter on greetd), launching niri
+
+dnf5 -y copr enable avengemedia/danklinux
+dnf5 -y install greetd greetd-selinux dms-greeter
+dnf5 -y copr disable avengemedia/danklinux
+
+# dms-greeter's %post already wrote /etc/greetd/config.toml for niri and
+# confirmed graphical.target; "dms greeter enable" refuses to run as root,
+# so just enable the service it would have enabled.
+systemctl enable greetd.service
+
+# niri/dms-greeter use libseat for session/TTY handling; only the seatd
+# backend is compiled into Fedora's libseat, so without a running seatd the
+# greeter panics with "Failed to open session: Function not implemented".
+dnf5 -y install seatd
+systemctl enable seatd.service
+usermod -aG seat greeter
+
 ### Clean up dnf cache/logs so they don't bloat the image (see lint warnings)
 
 dnf5 clean all
