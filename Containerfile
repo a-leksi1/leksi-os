@@ -1,7 +1,3 @@
-FROM quay.io/fedora/fedora-bootc:44
-
-COPY system/ /
-COPY scripts/build.sh /tmp/build.sh
-RUN chmod +x /tmp/build.sh && /tmp/build.sh && rm /tmp/build.sh
+FROM quay.io/fedora-ostree-desktops/silverblue:44
 
 RUN bootc container lint
