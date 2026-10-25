@@ -1,44 +1,74 @@
-# #!/bin/bash
+#!/bin/bash
 
-# set -ouex pipefail
+set -ouex pipefail
 
-# ### Install packages
+### Third-party repos (only used during the build, removed at the end)
 
-# # Packages can be installed from any enabled yum repo on the image.
-# # RPMfusion repos are available by default in ublue main images
-# # List of rpmfusion packages can be found here:
-# # https://mirrors.rpmfusion.org/mirrorlist?path=free/fedora/updates/43/x86_64/repoview/index.html&protocol=https&redirect=1
+cp /ctx/files/yum.repos.d/*.repo /etc/yum.repos.d/
 
-# # this installs a package from fedora repos
-# # dnf5 install -y tmux 
+### /opt handling
 
-# # Use a COPR Example:
-# #
-# # dnf5 -y copr enable ublue-os/staging
-# # dnf5 -y install package
-# # Disable COPRs so they don't end up enabled on the final image:
-# # dnf5 -y copr disable ublue-os/staging
+# On ostree systems /opt is a symlink to /var/opt, and bootc never updates
+# /var after the first install. Install into a real /opt, then move it under
+# /usr/lib/opt (part of the image) the same way rpm-ostree does for layering.
+rm /opt
+mkdir /opt
 
-# ### GNOME desktop (Silverblue-like), with GDM as the login manager
+### Install packages
 
-# dnf5 -y install @gnome-desktop
+# Dev tools (Fedora repos)
+dnf5 install -y \
+    cmake \
+    gcc \
+    gcc-c++ \
+    make \
+    podman-compose
 
-# systemctl enable gdm.service
-# systemctl set-default graphical.target
+# Apps (third-party repos)
+dnf5 install -y \
+    code \
+    google-chrome-stable \
+    lens \
+    microsoft-edge-stable
 
-# ### Clean up dnf cache/logs so they don't bloat the image (see lint warnings)
+### Move /opt content into the image
 
-# dnf5 clean all
-# rm -rf /var/log/dnf5.log* /var/cache/libdnf5 /run/dnf
+mkdir -p /usr/lib/opt
+for dir in /opt/*; do
+    name=$(basename "$dir")
+    mv "$dir" "/usr/lib/opt/$name"
+    echo "L+ /var/opt/$name - - - - /usr/lib/opt/$name" >> /usr/lib/tmpfiles.d/leksi-opt.conf
+done
+rmdir /opt
+ln -s var/opt /opt
 
-# # These are runtime-regenerated caches, safe to drop at build time
-# rm -rf /var/cache/libX11 /var/cache/swcatalog /var/cache/ldconfig/aux-cache
-# rm -f /var/lib/dnf/repos/*/countme
+### Image signature verification
 
-# #### Example for enabling a System Unit File
+# Updates of ghcr.io/a-leksi1/leksi-os must be signed with cosign.key
+# (checked when the system follows ostree-image-signed:docker://...)
+install -Dm644 /ctx/cosign.pub /etc/pki/containers/leksi-os.pub
+cp /ctx/files/registries.d/leksi-os.yaml /etc/containers/registries.d/
+jq '.transports.docker["ghcr.io/a-leksi1/leksi-os"] = [{
+        "type": "sigstoreSigned",
+        "keyPath": "/etc/pki/containers/leksi-os.pub",
+        "signedIdentity": {"type": "matchRepository"}
+    }]' /etc/containers/policy.json > /tmp/policy.json
+mv /tmp/policy.json /etc/containers/policy.json
 
-# # systemctl enable podman.socket
+### Clean up
 
-# ### Enable the MT7925 Wi-Fi retry service (script/unit installed from system/)
+rm -f /etc/yum.repos.d/{google-chrome,lens,microsoft-edge,vscode}.repo
 
-# # systemctl enable mt7925-retry.service
+# Chrome and Edge ship daily cron jobs that re-add their repo files
+rm -f /etc/cron.daily/{google-chrome,microsoft-edge}
+
+dnf5 clean all
+rm -rf /var/log/dnf5.log* /var/cache/libdnf5 /run/dnf
+
+# These are runtime-regenerated caches, safe to drop at build time
+rm -rf /var/cache/libX11 /var/cache/swcatalog /var/cache/ldconfig/aux-cache
+rm -rf /var/lib/dnf/repos
+
+#### Example for enabling a System Unit File
+
+# systemctl enable podman.socket

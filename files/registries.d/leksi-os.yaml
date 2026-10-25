@@ -1,0 +1,3 @@
+docker:
+  ghcr.io/a-leksi1/leksi-os:
+    use-sigstore-attachments: true

@@ -1,15 +1,19 @@
 name: build container
 on: 
   workflow_dispatch:
-  #push:
-#   schedule:
-#   # minute (0-59) hour (0-23) day of month (1-31) month (1-12) day of week (SUN-SAT) 
-#   # Triggers Fri at 13:30
-#   - cron: '30 13 * * FRI'
+  push:
+    branches: [main]
+  schedule:
+  # minute (0-59) hour (0-23) day of month (1-31) month (1-12) day of week (SUN-SAT)
+  # Triggers every day at 06:00 UTC, after the daily Silverblue base update
+  - cron: '0 6 * * *'
 
 jobs:
   leksi-os:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
     - uses: actions/checkout@v6
     - name: free disk space (ubuntu)
@@ -25,4 +29,17 @@ jobs:
     - name: run podman build
       run: podman build -t leksi-os --disable-compression=false .
     - name: push image to ghcr.io
-      run: podman push --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} leksi-os ghcr.io/a-leksi1/leksi-os:latest
+      run: podman push --digestfile /tmp/digest --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} leksi-os ghcr.io/a-leksi1/leksi-os:latest
+    # cosign v3 defaults to a new signature format that rpm-ostree/bootc can't read yet
+    - uses: sigstore/cosign-installer@v3
+      with:
+        cosign-release: 'v2.5.0'
+    - name: sign image
+      env:
+        COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_KEY }}
+        COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+      run: |
+        cosign login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+        cosign sign -y --key env://COSIGN_PRIVATE_KEY ghcr.io/a-leksi1/leksi-os@$(cat /tmp/digest)
+        # fails the run if the secret doesn't match cosign.pub
+        cosign verify --key cosign.pub ghcr.io/a-leksi1/leksi-os@$(cat /tmp/digest)
