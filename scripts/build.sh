@@ -31,6 +31,48 @@ dnf5 install -y \
     lens \
     microsoft-edge-stable
 
+### NVIDIA driver
+
+# Prebuilt kernel module signed by Universal Blue, plus the matching userspace
+# driver, from ghcr.io/ublue-os/akmods-nvidia-open (same steps as ublue's
+# nvidia-install.sh, without 32-bit libs and supergfxctl)
+AKMODS=/ctx/akmods-nvidia
+source "$AKMODS/kmods/nvidia-vars"
+
+KERNEL=$(ls /usr/lib/modules)
+if [ "$KERNEL" != "$KERNEL_VERSION" ]; then
+    echo "NVIDIA module is built for $KERNEL_VERSION but the image kernel is $KERNEL"
+    exit 1
+fi
+
+dnf5 install -y "$AKMODS"/ublue-os/ublue-os-nvidia-addons-*.rpm
+dnf5 install -y --enablerepo=fedora-nvidia --enablerepo=nvidia-container-toolkit \
+    "$AKMODS"/nvidia/*.x86_64.rpm \
+    "$AKMODS"/nvidia/*.noarch.rpm \
+    "$AKMODS/kmods/kmod-nvidia-$KERNEL_VERSION-$NVIDIA_AKMOD_VERSION.$DIST_ARCH.rpm" \
+    egl-wayland \
+    libva-nvidia-driver \
+    nvidia-container-toolkit
+
+KMOD_VERSION=$(rpm -q --queryformat '%{VERSION}' kmod-nvidia)
+DRIVER_VERSION=$(rpm -q --queryformat '%{VERSION}' nvidia-driver)
+if [ "$KMOD_VERSION" != "$DRIVER_VERSION" ]; then
+    echo "kmod-nvidia ($KMOD_VERSION) does not match nvidia-driver ($DRIVER_VERSION)"
+    exit 1
+fi
+
+# GPU access from Podman containers
+systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
+semodule --verbose --install /usr/share/selinux/packages/nvidia-container.pp
+
+# Public key to enroll in the firmware (MOK) so Secure Boot accepts the module
+install -Dm644 /ctx/files/ublue-akmods.der /etc/pki/akmods/certs/akmods-ublue.der
+
+# Rebuild the initramfs so it includes the nouveau blacklist
+dracut --no-hostonly --kver "$KERNEL" --reproducible --zstd -v --add ostree \
+    -f "/usr/lib/modules/$KERNEL/initramfs.img"
+chmod 0600 "/usr/lib/modules/$KERNEL/initramfs.img"
+
 ### Move /opt content into the image
 
 mkdir -p /usr/lib/opt
@@ -48,7 +90,14 @@ ln -s var/opt /opt
 # (checked when the system follows ostree-image-signed:docker://...)
 install -Dm644 /ctx/cosign.pub /etc/pki/containers/leksi-os.pub
 cp /ctx/files/registries.d/leksi-os.yaml /etc/containers/registries.d/
-jq '.transports.docker["ghcr.io/a-leksi1/leksi-os"] = [{
+# rpm-ostree refuses signed images while the global default is
+# insecureAcceptAnything, so reject by default and accept everything else
+# per transport instead (same behaviour for all other images).
+jq '.default = [{"type": "reject"}]
+    | reduce ("docker", "atomic", "containers-storage", "dir", "docker-archive",
+              "docker-daemon", "oci", "oci-archive", "sif", "tarball") as $t
+        (.; .transports[$t][""] //= [{"type": "insecureAcceptAnything"}])
+    | .transports.docker["ghcr.io/a-leksi1/leksi-os"] = [{
         "type": "sigstoreSigned",
         "keyPath": "/etc/pki/containers/leksi-os.pub",
         "signedIdentity": {"type": "matchRepository"}
@@ -68,6 +117,9 @@ rm -rf /var/log/dnf5.log* /var/cache/libdnf5 /run/dnf
 # These are runtime-regenerated caches, safe to drop at build time
 rm -rf /var/cache/libX11 /var/cache/swcatalog /var/cache/ldconfig/aux-cache
 rm -rf /var/lib/dnf/repos
+
+# Left behind by semodule and dracut
+rm -rf /run/selinux-policy /var/lib/xkb
 
 #### Example for enabling a System Unit File
 

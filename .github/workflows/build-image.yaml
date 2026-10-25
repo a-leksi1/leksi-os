@@ -26,8 +26,10 @@ jobs:
         large-packages: true
         docker-images: true
         swap-storage: true
+    - name: find base image kernel
+      run: echo "KERNEL_VERSION=$(skopeo inspect docker://quay.io/fedora-ostree-desktops/silverblue:44 | jq -r '.Labels["ostree.linux"]')" >> $GITHUB_ENV
     - name: run podman build
-      run: podman build -t leksi-os --disable-compression=false .
+      run: podman build --build-arg KERNEL_VERSION=$KERNEL_VERSION -t leksi-os --disable-compression=false .
     - name: push image to ghcr.io
       run: podman push --digestfile /tmp/digest --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} leksi-os ghcr.io/a-leksi1/leksi-os:latest
     # cosign v3 defaults to a new signature format that rpm-ostree/bootc can't read yet
