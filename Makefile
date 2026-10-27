@@ -22,11 +22,12 @@ REGISTRY ?= localhost:5000
 
 all: build iso
 
-# The NVIDIA module must match the base image kernel, so always build from the
-# latest base and read its kernel version from the registry
+# The NVIDIA module must match the base image kernel, so build from the newest
+# base that ublue has already published a module for
 build:
-	sudo podman build --pull=newer \
-		--build-arg KERNEL_VERSION=$$(skopeo inspect docker://quay.io/fedora-ostree-desktops/silverblue:44 | jq -r '.Labels["ostree.linux"]') \
+	eval "$$(scripts/find-base.sh)" && sudo podman build --pull=newer \
+		--build-arg BASE_TAG=$$BASE_TAG \
+		--build-arg KERNEL_VERSION=$$KERNEL_VERSION \
 		-t $(IMAGE) .
 
 iso:

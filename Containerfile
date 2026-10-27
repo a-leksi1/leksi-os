@@ -1,4 +1,6 @@
-# Kernel of the base image (from its ostree.linux label), passed by the build
+# Silverblue 44 tag and its kernel (from its ostree.linux label), both picked
+# by scripts/find-base.sh
+ARG BASE_TAG=44
 ARG KERNEL_VERSION
 
 # Prebuilt NVIDIA kernel module for that exact kernel, signed by Universal Blue
@@ -10,7 +12,7 @@ COPY files /files
 COPY cosign.pub /cosign.pub
 COPY --from=akmods-nvidia /rpms /akmods-nvidia
 
-FROM quay.io/fedora-ostree-desktops/silverblue:44
+FROM quay.io/fedora-ostree-desktops/silverblue:${BASE_TAG}
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     bash /ctx/scripts/build.sh
