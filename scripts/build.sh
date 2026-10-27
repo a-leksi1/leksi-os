@@ -61,6 +61,10 @@ if [ "$KMOD_VERSION" != "$DRIVER_VERSION" ]; then
     exit 1
 fi
 
+# Hide the driver from GNOME Software, which would offer to "enable" it
+# with its own akmods key (the driver is already part of the image)
+rm -f /usr/share/metainfo/com.nvidia.driver.metainfo.xml
+
 # GPU access from Podman containers
 systemctl enable nvidia-cdi-refresh.path nvidia-cdi-refresh.service
 semodule --verbose --install /usr/share/selinux/packages/nvidia-container.pp
@@ -72,6 +76,11 @@ install -Dm644 /ctx/files/ublue-akmods.der /etc/pki/akmods/certs/akmods-ublue.de
 dracut --no-hostonly --kver "$KERNEL" --reproducible --zstd -v --add ostree \
     -f "/usr/lib/modules/$KERNEL/initramfs.img"
 chmod 0600 "/usr/lib/modules/$KERNEL/initramfs.img"
+
+### Kernel arguments
+
+# Applied by bootc on install and on every switch/upgrade
+install -Dm644 -t /usr/lib/bootc/kargs.d /ctx/files/kargs.d/*.toml
 
 ### Move /opt content into the image
 

@@ -1,0 +1,3 @@
+# Disable Panel Replay on the AMD iGPU, which freezes the display on the
+# ASUS ProArt (Strix Point)
+kargs = ["amdgpu.dcdebugmask=0x400"]
