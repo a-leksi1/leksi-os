@@ -1,6 +1,6 @@
 # Usage:
 #   make          build the container image, then the disk image
-#   make build    build the container image only
+#   make build    build and rechunk the container image only
 #   make iso      build the disk image from the existing container image
 #   make push     push the container image to the local registry (for the VM)
 #   make clean    remove the disk-images output folder
@@ -11,6 +11,10 @@
 # container image from root's storage (/var/lib/containers/storage).
 
 IMAGE   ?= localhost/leksi-os:dev
+# Image as built, before rechunking into IMAGE
+UNCHUNKED ?= localhost/leksi-os:unchunked
+# Published image whose layer layout the rechunk keeps
+PREVIOUS ?= docker://ghcr.io/a-leksi1/leksi-os:latest
 BUILDER ?= quay.io/centos-bootc/bootc-image-builder:latest
 TYPE    ?= anaconda-iso
 ROOTFS  ?= xfs
@@ -23,13 +27,21 @@ REGISTRY ?= localhost:5000
 all: build iso
 
 # The NVIDIA module must match the base image kernel, so build from the newest
-# base that ublue has already published a module for
+# base that ublue has already published a module for. Then rechunk it like
+# the CI does: layers grouped by package, laid out like the published image.
 build:
 	eval "$$(scripts/find-base.sh)" && sudo podman build --pull=newer \
 		--build-arg FEDORA_VERSION=$$FEDORA_VERSION \
 		--build-arg BASE_TAG=$$BASE_TAG \
 		--build-arg KERNEL_VERSION=$$KERNEL_VERSION \
-		-t $(IMAGE) .
+		-t $(UNCHUNKED) .
+	sudo podman run --rm --privileged --security-opt label=disable \
+		-v /var/lib/containers:/var/lib/containers \
+		$(UNCHUNKED) \
+		rpm-ostree compose build-chunked-oci --bootc --format-version=2 --max-layers 128 \
+			--from $(UNCHUNKED) \
+			--previous-build $(PREVIOUS) \
+			--output containers-storage:$(IMAGE)
 
 iso:
 	mkdir -p $(OUTPUT)

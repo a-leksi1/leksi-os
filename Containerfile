@@ -17,7 +17,8 @@ COPY --from=akmods-nvidia /rpms /akmods-nvidia
 FROM quay.io/fedora-ostree-desktops/silverblue:${BASE_TAG}
 
 # One layer for everything; smaller updates come from rechunking after the
-# build, not from more layers. Package caches, logs and temp files go to
+# build (rpm-ostree compose build-chunked-oci, in the CI and the Makefile),
+# not from more layers. Package caches, logs and temp files go to
 # build-time mounts so they never land in the image.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \

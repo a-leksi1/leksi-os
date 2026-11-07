@@ -28,10 +28,23 @@ jobs:
         swap-storage: true
     - name: find base image with a matching NVIDIA module
       run: scripts/find-base.sh >> $GITHUB_ENV
+    # Root's storage, so the rechunk container below can read the image
     - name: run podman build
-      run: podman build --build-arg FEDORA_VERSION=$FEDORA_VERSION --build-arg BASE_TAG=$BASE_TAG --build-arg KERNEL_VERSION=$KERNEL_VERSION -t leksi-os --disable-compression=false .
+      run: sudo podman build --build-arg FEDORA_VERSION=$FEDORA_VERSION --build-arg BASE_TAG=$BASE_TAG --build-arg KERNEL_VERSION=$KERNEL_VERSION -t localhost/leksi-os:unchunked .
+    # Splits the image into layers grouped by package, so an update only
+    # downloads the packages that changed. --previous-build keeps the layout of
+    # the published image, so unchanged layers keep the same digest.
+    - name: rechunk image
+      run: |
+        sudo podman run --rm --privileged --security-opt label=disable \
+          -v /var/lib/containers:/var/lib/containers \
+          localhost/leksi-os:unchunked \
+          rpm-ostree compose build-chunked-oci --bootc --format-version=2 --max-layers 128 \
+            --from localhost/leksi-os:unchunked \
+            --previous-build docker://ghcr.io/a-leksi1/leksi-os:latest \
+            --output containers-storage:localhost/leksi-os:latest
     - name: push image to ghcr.io
-      run: podman push --digestfile /tmp/digest --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} leksi-os ghcr.io/a-leksi1/leksi-os:latest
+      run: sudo podman push --digestfile /tmp/digest --creds=${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} localhost/leksi-os:latest ghcr.io/a-leksi1/leksi-os:latest
     # cosign v3 defaults to a new signature format that rpm-ostree/bootc can't read yet
     - uses: sigstore/cosign-installer@v3
       with:
