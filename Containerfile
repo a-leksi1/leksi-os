@@ -1,10 +1,11 @@
-# Silverblue 44 tag and its kernel (from its ostree.linux label), both picked
-# by scripts/find-base.sh
-ARG BASE_TAG=44
+# Fedora release, Silverblue tag and its kernel (from its ostree.linux label),
+# all picked by scripts/find-base.sh
+ARG FEDORA_VERSION
+ARG BASE_TAG
 ARG KERNEL_VERSION
 
 # Prebuilt NVIDIA kernel module for that exact kernel, signed by Universal Blue
-FROM ghcr.io/ublue-os/akmods-nvidia-open:main-44-${KERNEL_VERSION} AS akmods-nvidia
+FROM ghcr.io/ublue-os/akmods-nvidia-open:main-${FEDORA_VERSION}-${KERNEL_VERSION} AS akmods-nvidia
 
 # Build inputs, mounted at /ctx during the build and never copied into the image
 FROM scratch AS ctx

@@ -26,6 +26,7 @@ all: build iso
 # base that ublue has already published a module for
 build:
 	eval "$$(scripts/find-base.sh)" && sudo podman build --pull=newer \
+		--build-arg FEDORA_VERSION=$$FEDORA_VERSION \
 		--build-arg BASE_TAG=$$BASE_TAG \
 		--build-arg KERNEL_VERSION=$$KERNEL_VERSION \
 		-t $(IMAGE) .
